@@ -1,43 +1,46 @@
 package com.codigo.domain.impl;
 
-import com.codigo.domain.ports.in.ServiceIn;
-import com.codigo.domain.ports.out.ServiceOut;
+import com.codigo.domain.agregates.request.PersonaRequest;
+import com.codigo.domain.agregates.response.PersonaResponse;
+import com.codigo.domain.ports.in.PersonaServiceIn;
+import com.codigo.domain.ports.in.base.BaseServiceIn;
+import com.codigo.domain.ports.out.PersonaServiceOut;
+import com.codigo.domain.ports.out.base.BaseServiceOut;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Optional;
 
 @Component
-public class PersonaServiceImpl<T,K> implements ServiceIn<T,K> {
+@RequiredArgsConstructor
+public class PersonaServiceImpl implements PersonaServiceIn {
 
-    @Autowired(required = false)
-    @Qualifier("persona_adapter")
-    private ServiceOut<T,K> servicePersonaOut;
+    private final PersonaServiceOut servicePersonaOut;
 
     @Override
-    public T crearIn(K request) {
+    public PersonaResponse crearIn(PersonaRequest request) {
         return servicePersonaOut.crearOut(request);
     }
 
     @Override
-    public T obtenerIn(Long id) {
+    public PersonaResponse obtenerIn(Long id) {
         return servicePersonaOut.obtenerOut(id);
     }
 
     @Override
-    public List<T> obtenerTodosIn() {
+    public List<PersonaResponse> obtenerTodosIn() {
         return servicePersonaOut.obtenerTodosOut();
     }
 
     @Override
-    public T actualizarIn(K request, Long id) {
+    public PersonaResponse actualizarIn(PersonaRequest request, Long id) {
         return servicePersonaOut.actualizarOut(request, id);
     }
 
     @Override
-    public T deleteIn(Long id) {
+    public PersonaResponse deleteIn(Long id) {
         return servicePersonaOut.deleteOut(id);
     }
 }

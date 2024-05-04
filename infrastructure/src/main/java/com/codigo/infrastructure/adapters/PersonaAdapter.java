@@ -3,12 +3,10 @@ package com.codigo.infrastructure.adapters;
 import com.codigo.domain.agregates.constants.Constants;
 import com.codigo.domain.agregates.exception.BadRequestException;
 import com.codigo.domain.agregates.request.PersonaRequest;
-import com.codigo.domain.agregates.response.EmpresaResponse;
-import com.codigo.domain.agregates.response.EmpresaSunatResponse;
 import com.codigo.domain.agregates.response.PersonaReniecResponse;
 import com.codigo.domain.agregates.response.PersonaResponse;
-import com.codigo.domain.ports.out.ServiceOut;
-import com.codigo.infrastructure.client.ClientDocument;
+import com.codigo.domain.ports.out.PersonaServiceOut;
+import com.codigo.infrastructure.client.ApiDocumentService;
 import com.codigo.infrastructure.dao.EmpresaRepository;
 import com.codigo.infrastructure.dao.PersonaRepository;
 import com.codigo.infrastructure.entity.EmpresaEntity;
@@ -18,32 +16,27 @@ import com.codigo.infrastructure.utiliies.Utilities;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
-@Service("persona_adapter")
+@Service
 @RequiredArgsConstructor
-public class PersonaAdapter implements ServiceOut<PersonaResponse, PersonaRequest> {
+public class PersonaAdapter implements PersonaServiceOut {
 
     private final PersonaRepository personaRepository;
     private final EmpresaRepository empresaRepository;
     private final Utilities utilities;
-    private final ClientDocument clientDocument;
     private final RedisService redisService;
-
-    @Value("${api.token}")
-    private String tokenDocument;
+    private final ApiDocumentService apiDocumentService;
 
     @Override
     public PersonaResponse crearOut(PersonaRequest request) {
         boolean exist = personaRepository.existsByNumeroDocumento(request.getNumeroDocumento());
         if(exist) throw new BadRequestException("La persona ya existe en la base de datos.");
         try{
-            PersonaReniecResponse response_reniec = getInfoReniec(request.getNumeroDocumento());
-            PersonaEntity entity = fromReniecToEntity(response_reniec, "create", 0L);
+            PersonaReniecResponse response_reniec = apiDocumentService.getInfoReniec(request.getNumeroDocumento());
+            PersonaEntity entity = apiDocumentService.fromDocumentToEntity(new PersonaEntity(),personaRepository,response_reniec, "create", 0L);
             entity = getEntityComplete(entity,request);
             return new ModelMapper().map(personaRepository.save(entity),PersonaResponse.class);
         }catch (FeignException e){
@@ -53,19 +46,13 @@ public class PersonaAdapter implements ServiceOut<PersonaResponse, PersonaReques
 
     @Override
     public PersonaResponse obtenerOut(Long id) {
-
-        String redisValue = validateEmpresaRedis(id);
-
-        if(redisValue != null){
-            return utilities.convertStringToObject(redisValue,PersonaResponse.class);
-        }
-
+        String redisValue = redisService.validateObjectInRedis(Constants.REDIS_PERSONA_KEY+id);
+        if(redisValue != null) return utilities.convertStringToObject(redisValue,PersonaResponse.class);
         boolean exist = personaRepository.existsById(id);
         if(!exist) throw new BadRequestException("La persona no existe en la base de datos.");
-
         PersonaEntity entity = personaRepository.findById(id).orElse(null);
         PersonaResponse response = new ModelMapper().map(entity, PersonaResponse.class);
-        saveEmpresaRedis(response, id);
+        redisService.saveObjectInRedis(response, Constants.REDIS_PERSONA_KEY+id);
         return response;
     }
 
@@ -80,11 +67,12 @@ public class PersonaAdapter implements ServiceOut<PersonaResponse, PersonaReques
         boolean exist = personaRepository.existsById(id);
         if(!exist) throw new BadRequestException("La persona no existe en la base de datos.");
         try{
-            PersonaReniecResponse response_reniec = getInfoReniec(request.getNumeroDocumento());
-            PersonaEntity entity = fromReniecToEntity(response_reniec, "update", id);
+            PersonaReniecResponse response_reniec = apiDocumentService.getInfoReniec(request.getNumeroDocumento());
+            PersonaEntity entity = apiDocumentService.fromDocumentToEntity(new PersonaEntity(),personaRepository,
+                    response_reniec, "update", id);
             entity = getEntityComplete(entity,request);
             PersonaResponse response = new ModelMapper().map(personaRepository.save(entity), PersonaResponse.class);
-            saveEmpresaRedis(response, id);
+            redisService.saveObjectInRedis(response, Constants.REDIS_PERSONA_KEY+id);
             return response;
         }catch (FeignException e){
             return null;
@@ -97,10 +85,11 @@ public class PersonaAdapter implements ServiceOut<PersonaResponse, PersonaReques
         if(!exist) throw new BadRequestException("La persona no existe en la base de datos.");
         PersonaEntity entity_before = personaRepository.findById(id).orElse(null);
         try{
-            PersonaReniecResponse response_sunat = getInfoReniec(entity_before.getNumeroDocumento());
-            PersonaEntity entity = fromReniecToEntity(response_sunat, "delete", id);
+            PersonaReniecResponse response_reniec = apiDocumentService.getInfoReniec(entity_before.getNumeroDocumento());
+            PersonaEntity entity = apiDocumentService.fromDocumentToEntity(new PersonaEntity(),personaRepository,
+                    response_reniec, "delete", id);
             PersonaResponse response = new ModelMapper().map(personaRepository.save(entity), PersonaResponse.class);
-            saveEmpresaRedis(response, id);
+            redisService.saveObjectInRedis(response, Constants.REDIS_PERSONA_KEY+id);
             return response;
         }catch (FeignException e){
             return null;
@@ -116,41 +105,4 @@ public class PersonaAdapter implements ServiceOut<PersonaResponse, PersonaReques
         return entity;
     }
 
-    public PersonaEntity fromReniecToEntity(PersonaReniecResponse response, String accion, Long id){
-        PersonaEntity entity;
-        if(accion.equals("create")){
-            entity = new PersonaEntity();
-            new ModelMapper().map(response, entity);
-            entity.setEstado(Constants.STATUS_ACTIVE);
-            entity.setUsuaCreate(Constants.AUDIT_ADMIN);
-            entity.setDateCreate(utilities.getTimestampToday());
-        }else{
-            entity = personaRepository.findById(id).orElse(null);
-            if (entity==null) throw new BadRequestException("La persona no existe en la base de datos.");
-            new ModelMapper().map(response, entity);
-            if (accion.equals("update")){
-                entity.setUsuaModif(Constants.AUDIT_ADMIN);
-                entity.setDateModif(utilities.getTimestampToday());
-            } else if (accion.equals("delete")) {
-                entity.setEstado(Constants.STATUS_INACTIVE);
-                entity.setUsuaDelet(Constants.AUDIT_ADMIN);
-                entity.setDateDelet(utilities.getTimestampToday());
-            }
-        }
-        return entity;
-    }
-
-
-    public PersonaReniecResponse getInfoReniec(String documento){
-        return clientDocument.getInfoReniec(documento, tokenDocument);
-    }
-
-    public String validateEmpresaRedis(Long id){
-        return redisService.getRedisValue(Constants.REDIS_PERSONA_KEY+id);
-    }
-
-    public void saveEmpresaRedis(PersonaResponse entity, Long id){
-        String redisData = utilities.convertObjectToString(entity);
-        redisService.saveRedisIn(Constants.REDIS_PERSONA_KEY+id, redisData, 10);
-    }
 }

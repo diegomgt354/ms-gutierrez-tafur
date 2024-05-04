@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 
 @FeignClient(name = "client-document", url = "https://api.apis.net.pe/v2/")
-public interface ClientDocument {
+public interface ClientApiDocument {
 
     @GetMapping("reniec/dni")
     PersonaReniecResponse getInfoReniec(@RequestParam("numero") String numero, @RequestHeader("Authorization") String authorization);

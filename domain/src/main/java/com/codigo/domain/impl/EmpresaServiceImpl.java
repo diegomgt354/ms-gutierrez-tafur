@@ -1,43 +1,46 @@
 package com.codigo.domain.impl;
 
-import com.codigo.domain.ports.in.ServiceIn;
-import com.codigo.domain.ports.out.ServiceOut;
+import com.codigo.domain.agregates.request.EmpresaRequest;
+import com.codigo.domain.agregates.response.EmpresaResponse;
+import com.codigo.domain.ports.in.EmpresaServiceIn;
+import com.codigo.domain.ports.in.base.BaseServiceIn;
+import com.codigo.domain.ports.out.EmpresaServiceOut;
+import com.codigo.domain.ports.out.base.BaseServiceOut;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Optional;
 
 @Component
-public class EmpresaServiceImpl<T,K> implements ServiceIn<T,K> {
+@RequiredArgsConstructor
+public class EmpresaServiceImpl implements EmpresaServiceIn {
 
-    @Autowired(required = false)
-    @Qualifier("empresa_adapter")
-    private ServiceOut<T,K> serviceEmpresaOut;
+    private final EmpresaServiceOut serviceEmpresaOut;
 
     @Override
-    public T crearIn(K request) {
+    public EmpresaResponse crearIn(EmpresaRequest request) {
         return serviceEmpresaOut.crearOut(request);
     }
 
     @Override
-    public T obtenerIn(Long id) {
+    public EmpresaResponse obtenerIn(Long id) {
         return serviceEmpresaOut.obtenerOut(id);
     }
 
     @Override
-    public List<T> obtenerTodosIn() {
+    public List<EmpresaResponse> obtenerTodosIn() {
         return serviceEmpresaOut.obtenerTodosOut();
     }
 
     @Override
-    public T actualizarIn(K request, Long id) {
+    public EmpresaResponse actualizarIn(EmpresaRequest request, Long id) {
         return serviceEmpresaOut.actualizarOut(request, id);
     }
 
     @Override
-    public T deleteIn(Long id) {
+    public EmpresaResponse deleteIn(Long id) {
         return serviceEmpresaOut.deleteOut(id);
     }
 }

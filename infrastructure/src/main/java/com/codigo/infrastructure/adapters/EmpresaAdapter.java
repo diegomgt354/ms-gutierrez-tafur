@@ -5,8 +5,9 @@ import com.codigo.domain.agregates.exception.BadRequestException;
 import com.codigo.domain.agregates.request.EmpresaRequest;
 import com.codigo.domain.agregates.response.EmpresaResponse;
 import com.codigo.domain.agregates.response.EmpresaSunatResponse;
-import com.codigo.domain.ports.out.ServiceOut;
-import com.codigo.infrastructure.client.ClientDocument;
+import com.codigo.domain.ports.out.EmpresaServiceOut;
+import com.codigo.infrastructure.client.ClientApiDocument;
+import com.codigo.infrastructure.client.ApiDocumentService;
 import com.codigo.infrastructure.dao.EmpresaRepository;
 import com.codigo.infrastructure.entity.EmpresaEntity;
 import com.codigo.infrastructure.redis.RedisService;
@@ -19,14 +20,16 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-@Service("empresa_adapter")
+@Service
 @RequiredArgsConstructor
-public class EmpresaAdapter implements ServiceOut<EmpresaResponse, EmpresaRequest> {
+public class EmpresaAdapter implements EmpresaServiceOut {
 
     private final EmpresaRepository empresaRepository;
     private final Utilities utilities;
-    private final ClientDocument clientDocument;
+    private final ClientApiDocument clientApiDocument;
     private final RedisService redisService;
+
+    private final ApiDocumentService apiDocumentService;
 
     @Value("${api.token}")
     private String tokenDocument;
@@ -36,8 +39,9 @@ public class EmpresaAdapter implements ServiceOut<EmpresaResponse, EmpresaReques
         boolean exits = empresaRepository.existsByNumeroDocumento(request.getNumeroDocumento());
         if (exits) throw new BadRequestException("La empresa ya existe en la base de datos.");
         try{
-            EmpresaSunatResponse response_sunat = getInfoSunat(request.getNumeroDocumento());
-            EmpresaEntity entity = fromSunatToEntity(response_sunat, "create",0L);
+            EmpresaSunatResponse response_sunat = apiDocumentService.getInfoSunat(request.getNumeroDocumento());
+            EmpresaEntity entity = apiDocumentService.fromDocumentToEntity(new EmpresaEntity(),empresaRepository,response_sunat, "create", 0L);
+
             return new ModelMapper().map(empresaRepository.save(entity), EmpresaResponse.class);
         }catch (FeignException e){
             throw new BadRequestException("RUC incorrecto");
@@ -47,7 +51,7 @@ public class EmpresaAdapter implements ServiceOut<EmpresaResponse, EmpresaReques
     @Override
     public EmpresaResponse obtenerOut(Long id) {
 
-        String redisValue = validateEmpresaRedis(id);
+        String redisValue = redisService.validateObjectInRedis(Constants.REDIS_EMPRESA_KEY+id);
 
         if(redisValue != null){
             return utilities.convertStringToObject(redisValue,EmpresaResponse.class);
@@ -58,7 +62,7 @@ public class EmpresaAdapter implements ServiceOut<EmpresaResponse, EmpresaReques
 
         EmpresaEntity entity = empresaRepository.findById(id).orElse(null);
         EmpresaResponse response = new ModelMapper().map(entity, EmpresaResponse.class);
-        saveEmpresaRedis(response, id);
+        redisService.saveObjectInRedis(response, Constants.REDIS_EMPRESA_KEY+id);
         return response;
     }
 
@@ -73,10 +77,10 @@ public class EmpresaAdapter implements ServiceOut<EmpresaResponse, EmpresaReques
         boolean exist = empresaRepository.existsById(id);
         if(!exist) throw new BadRequestException("La empresa no existe en la base de datos.");
         try{
-            EmpresaSunatResponse response_sunat = getInfoSunat(request.getNumeroDocumento());
-            EmpresaEntity entity = fromSunatToEntity(response_sunat, "update", id);
+            EmpresaSunatResponse response_sunat = apiDocumentService.getInfoSunat(request.getNumeroDocumento());
+            EmpresaEntity entity = apiDocumentService.fromDocumentToEntity(new EmpresaEntity(),empresaRepository,response_sunat, "update", id);
             EmpresaResponse response = new ModelMapper().map(empresaRepository.save(entity), EmpresaResponse.class);
-            saveEmpresaRedis(response, id);
+            redisService.saveObjectInRedis(response, Constants.REDIS_EMPRESA_KEY+id);
             return response;
         }catch (FeignException e){
             return null;
@@ -89,51 +93,14 @@ public class EmpresaAdapter implements ServiceOut<EmpresaResponse, EmpresaReques
         if(!exist) throw new BadRequestException("La empresa no existe en la base de datos.");
         EmpresaEntity entity_before = empresaRepository.findById(id).orElse(null);
         try{
-            EmpresaSunatResponse response_sunat = getInfoSunat(entity_before.getNumeroDocumento());
-            EmpresaEntity entity = fromSunatToEntity(response_sunat, "delete", id);
+            EmpresaSunatResponse response_sunat = apiDocumentService.getInfoSunat(entity_before.getNumeroDocumento());
+            EmpresaEntity entity = apiDocumentService.fromDocumentToEntity(new EmpresaEntity(),empresaRepository,response_sunat, "delete", id);
             EmpresaResponse response = new ModelMapper().map(empresaRepository.save(entity), EmpresaResponse.class);
-            saveEmpresaRedis(response, id);
+            redisService.saveObjectInRedis(response, Constants.REDIS_EMPRESA_KEY+id);
             return response;
         }catch (FeignException e){
             return null;
         }
     }
 
-    public EmpresaEntity fromSunatToEntity(EmpresaSunatResponse response, String accion, Long id){
-        EmpresaEntity entity;
-        if(accion.equals("create")){
-            entity = new EmpresaEntity();
-            new ModelMapper().map(response, entity);
-            entity.setEstado(Constants.STATUS_ACTIVE);
-            entity.setUsuaCreate(Constants.AUDIT_ADMIN);
-            entity.setDateCreate(utilities.getTimestampToday());
-        }else{
-            entity = empresaRepository.findById(id).orElse(null);
-            if (entity==null) throw new BadRequestException("La empresa no existe en la base de datos.");
-            new ModelMapper().map(response, entity);
-            if (accion.equals("update")){
-                entity.setUsuaModif(Constants.AUDIT_ADMIN);
-                entity.setDateModif(utilities.getTimestampToday());
-            } else if (accion.equals("delete")) {
-                entity.setEstado(Constants.STATUS_INACTIVE);
-                entity.setUsuaDelet(Constants.AUDIT_ADMIN);
-                entity.setDateDelet(utilities.getTimestampToday());
-            }
-        }
-        return entity;
-    }
-
-    public EmpresaSunatResponse getInfoSunat(String documento){
-        return clientDocument.getInfoSunat(documento, tokenDocument);
-    }
-
-
-    public String validateEmpresaRedis(Long id){
-        return redisService.getRedisValue(Constants.REDIS_EMPRESA_KEY+id);
-    }
-
-    public void saveEmpresaRedis(EmpresaResponse entity, Long id){
-        String redisData = utilities.convertObjectToString(entity);
-        redisService.saveRedisIn(Constants.REDIS_EMPRESA_KEY+id, redisData, 10);
-    }
 }

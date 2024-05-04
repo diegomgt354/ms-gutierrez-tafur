@@ -1,9 +1,8 @@
-package com.codigo.domain.ports.in;
+package com.codigo.domain.ports.in.base;
 
 import java.util.List;
-import java.util.Optional;
 
-public interface ServiceIn<T,K> {
+public interface BaseServiceIn<T,K> {
 
     T crearIn(K request);
     T obtenerIn(Long id);

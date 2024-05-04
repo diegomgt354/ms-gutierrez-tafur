@@ -1,11 +1,8 @@
-package com.codigo.domain.ports.out;
-
-import org.springframework.stereotype.Component;
+package com.codigo.domain.ports.out.base;
 
 import java.util.List;
-import java.util.Optional;
 
-public interface ServiceOut<T,K> {
+public interface BaseServiceOut<T,K> {
 
     T crearOut(K request);
     T obtenerOut(Long id);
