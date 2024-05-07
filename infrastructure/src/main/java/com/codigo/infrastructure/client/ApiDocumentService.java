@@ -16,7 +16,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ApiDocumentService {
 
-    private final ClientApiDocument clientApiDocument;
+    private final ClientReniec clientReniec;
+    private final ClientSunat clientSunat;
     private final Utilities utilities;
 
     @Value("${api.token}")
@@ -51,10 +52,10 @@ public class ApiDocumentService {
     }
 
     public EmpresaSunatResponse getInfoSunat(String documento){
-        return clientApiDocument.getInfoSunat(documento, tokenDocument);
+        return clientSunat.getInfoSunat(documento, tokenDocument);
     }
 
     public PersonaReniecResponse getInfoReniec(String documento){
-        return clientApiDocument.getInfoReniec(documento, tokenDocument);
+        return clientReniec.getInfoReniec(documento, tokenDocument);
     }
 }

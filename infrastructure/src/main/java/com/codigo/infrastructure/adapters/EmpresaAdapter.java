@@ -6,7 +6,7 @@ import com.codigo.domain.agregates.request.EmpresaRequest;
 import com.codigo.domain.agregates.response.EmpresaResponse;
 import com.codigo.domain.agregates.response.EmpresaSunatResponse;
 import com.codigo.domain.ports.out.EmpresaServiceOut;
-import com.codigo.infrastructure.client.ClientApiDocument;
+import com.codigo.infrastructure.client.ClientReniec;
 import com.codigo.infrastructure.client.ApiDocumentService;
 import com.codigo.infrastructure.dao.EmpresaRepository;
 import com.codigo.infrastructure.entity.EmpresaEntity;
@@ -26,7 +26,6 @@ public class EmpresaAdapter implements EmpresaServiceOut {
 
     private final EmpresaRepository empresaRepository;
     private final Utilities utilities;
-    private final ClientApiDocument clientApiDocument;
     private final RedisService redisService;
 
     private final ApiDocumentService apiDocumentService;
